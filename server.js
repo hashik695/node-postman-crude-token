@@ -2,6 +2,8 @@ var express=require("express")
 var mysql=require("mysql")
 var cors=require("cors")
 var bodyParser=require("body-parser")
+var jwt=require("jsonwebtoken")
+
 var app=express()
 app.use(cors())
 
@@ -12,14 +14,56 @@ var con=mysql.createConnection({
     host:"localhost",
     user:"root",
     password:"",
-    database:"book_db"
+    database:"usertable"
 })
 con.connect((err,data)=>{
     if(err) throw err
     console.log("connected");
 })
 
-app.get("/book",(req,res)=>{
+function verifyToken(req,res,next){
+    let authHeader=req.headers.authorization
+    if(authHeader==undefined){
+       res.status(401).send({error:"no token provided"})
+    }
+    let token=authHeader.split(" ")[1]
+    jwt.verify(token,"secret",(err,decode)=>{
+        if(err){
+            res.status(500).send({errore:"autheentication failed"})
+        }else{
+            next()
+        }
+
+    })
+}
+
+
+app.post("/login",jsonParser,(req,res)=>{
+    if(req.body.username==undefined || req.body.password==undefined){
+        res.status(500).send({error:"AUTHENTICATION FAILED"})
+    }
+    let username=req.body.username
+    let password=req.body.password
+
+    let qr= `select display_name from users where username='${username}' and password=sha1('${password}')`
+    con.query(qr,(err,result)=>{
+        if(err || result.length==0){
+            res.status(500).send({error:"login failed"})
+        }
+        else{
+            let resp={
+                id:result[0].id,
+                display_name:result[0].display_name
+            }
+            let token=jwt.sign(resp,"secret",{expiresIn
+            :60})
+            res.status(200).send({auth:true,token:token})
+        }
+    })
+
+})
+
+app.get("/book",verifyToken,(req,res)=>{
      var c=`select * from books`
      con.query(c,(err,result,field)=>{
          if(err)
